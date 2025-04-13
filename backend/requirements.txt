@@ -1,0 +1,10 @@
+django
+djangorestframework
+daphne
+wheel
+psycopg2-binary
+django-cors-headers
+channels
+redis
+Pillow
+channels_redis

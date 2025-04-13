@@ -1,0 +1,104 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.env
+*.venv
+venv/
+ENV/
+env/
+.venv/
+
+# Django
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.pot
+*.py[cod]
+media/
+staticfiles/
+static_root/
+local_settings.py
+db.sqlite3
+
+# If using Django migrations
+*/migrations/__pycache__/
+*/migrations/*.py[cod]
+
+# Vite / React
+node_modules/
+dist/
+build/
+.vite/
+.vscode/
+*.local
+.env.local
+.env.*.local
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.coverage
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+
+# MyPy / Pylint / Coverage / Pyre
+.mypy_cache/
+.pyre/
+.pytype/
+coverage.xml
+
+# Git
+*.orig
+*.rej
+
+# Optional: если у тебя фронт и бэк в отдельных папках
+frontend/node_modules/
+frontend/dist/
+backend/__pycache__/
