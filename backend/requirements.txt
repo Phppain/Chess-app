@@ -8,3 +8,4 @@ channels
 redis
 Pillow
 channels_redis
+python-chess

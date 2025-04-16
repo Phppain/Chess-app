@@ -8,7 +8,7 @@ export const Piece = ({ classPiece, colorPiece, position, onDragStart, onClick }
             className={`piece ${classPiece} ${colorPiece}`}
             draggable
             onDragStart={(e) => onDragStart(e, position)} // передаем данные о позиции
-            onClick={(e) => onClick(e, position)}
+            onClick={() => onClick(position)} // передаем позицию при клике
         >
         </div>
     );

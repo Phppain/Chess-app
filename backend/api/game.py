@@ -55,6 +55,82 @@ class Board:
 
         return board
 
+    def is_check(self, color):
+        king_pos = self.get_king_position(color)
+        for pos, piece in self._board_position.items():
+            if piece and piece.color != color:
+                if king_pos in piece.possible_moves():
+                    return True
+        return False
+
+    def is_checkmate(self, color):
+        if not self.is_check(color):
+            return False
+        for pos, piece in self._board_position.items():
+            if piece and piece.color == color:
+                for move in piece.possible_moves():
+                    temp_pos = piece.position
+                    piece.position = move
+                    if not self.is_check(color):
+                        piece.position = temp_pos
+                        return False
+                    piece.position = temp_pos
+        return True
+
+    def is_stalemate(self, color):
+        if self.is_check(color):
+            return False
+        for pos, piece in self._board_position.items():
+            if piece and piece.color == color:
+                for move in piece.possible_moves():
+                    temp_pos = piece.position
+                    piece.position = move
+                    if not self.is_check(color):
+                        piece.position = temp_pos
+                        return False
+                    piece.position = temp_pos
+        return True
+
+    def get_king_position(self, color):
+        for pos, piece in self._board_position.items():
+            if isinstance(piece, King) and piece.color == color:
+                return pos
+        return None
+
+    def is_in_check_by_piece(self, piece, target_pos):
+        for pos, target_piece in self._board_position.items():
+            if target_piece and target_piece.color != piece.color:
+                if target_pos in target_piece.possible_moves():
+                    return True
+        return False
+
+    def is_pin(self, piece, target_pos):
+        king_pos = self.get_king_position(piece.color)
+        direction = self.get_direction(piece.position, target_pos)
+        path = self.get_path(piece.position, target_pos)
+
+        for pos in path:
+            if isinstance(self._board_position.get(pos), Piece):
+                return False
+        return True
+
+    def get_direction(self, start_pos, end_pos):
+        dx = end_pos[0] - start_pos[0]
+        dy = end_pos[1] - start_pos[1]
+        return (dx, dy)
+
+    def get_path(self, start_pos, end_pos):
+        dx, dy = self.get_direction(start_pos, end_pos)
+        path = []
+
+        x, y = start_pos
+        while (x, y) != end_pos:
+            x += dx // max(abs(dx), 1)
+            y += dy // max(abs(dy), 1)
+            path.append((x, y))
+
+        return path
+
     def serialize(self):
         """Для сохранения в базу"""
         result = {}
@@ -65,6 +141,12 @@ class Board:
                     "color": piece.color,
                     "position": piece.position,
                 }
+            else:
+                result[str(position)] = {
+                    "type": None,
+                    "color": None,
+                    "position": position
+                }
         return result
 
     def deserialize(self, data):
@@ -72,12 +154,13 @@ class Board:
         self._board_position = {}
         for pos_str, piece_data in data.items():
             row, col = eval(pos_str)  # (0, 1) как строка → tuple
-            piece_type = piece_data['type']
-            color = piece_data['color']
-            position = tuple(piece_data['position'])
+            if piece_data['type'] is not None:
+                piece_type = piece_data['type']
+                color = piece_data['color']
+                position = tuple(piece_data['position'])
 
-            piece_class = globals()[piece_type]
-            self._board_position[(row, col)] = piece_class(color, position, self)
+                piece_class = globals()[piece_type]
+                self._board_position[(row, col)] = piece_class(color, position, self)
 
     def board_position_as_dict(self):
         """Аналог serialize — просто удобное имя"""
@@ -101,13 +184,19 @@ class Piece:
         return self._position
 
     def can_move(self, new_position):
-        board = self.board.board_position
-        piece = board.get(new_position)
+        board = self.board
+        # for p in board.keys():
+        #     # print(p,type(p), new_position, type(new_position))
+        #     if p == str(new_position):
+        #         print(p)
+        piece = next((board.get(p) for p in board if p == str(new_position)), None)
+        print('Piece:', piece, new_position)
 
-        if piece is None:
+        if piece is None or piece.get('type') is None:
             return new_position
-        elif piece.color != self.color:
-            self.attack(piece, piece.price, piece.color)
+        elif piece.get('color') != self.color:
+            # print(globals()[])
+            self.attack(piece, globals()[piece.get('type')].price, piece.get('color'))
             return new_position
 
         return None
@@ -116,10 +205,12 @@ class Piece:
         pass
         
     def attack(self, attacked_piece, price, color):
+        board = Board()
+        board.deserialize(self.board)
         if color == 'black':
-            self.board.white_killed_pieces.append(attacked_piece)
+            board.white_killed_pieces.append(attacked_piece)
         else:
-            self.board.black_killed_pieces.append(attacked_piece)
+            Board().deserialize(self.board).black_killed_pieces.append(attacked_piece)
 
 
 class Pawn(Piece):
@@ -129,18 +220,21 @@ class Pawn(Piece):
         if self.color == 'white':
             if self.position[0] == 1:
                 move = self.can_move((self.position[0] + 2, self.position[1]))
-                moves.append(move)
+                if move:
+                    moves.append(move)
         
             move = self.can_move((self.position[0] + 1, self.position[1]))
 
         else:
             if self.position[0] == 6:
                 move = self.can_move((self.position[0] - 2, self.position[1]))
-                moves.append(move)
+                if move:
+                    moves.append(move)
         
             move = self.can_move((self.position[0] - 1, self.position[1]))
 
-        moves.append(move)
+        if move:
+            moves.append(move)
 
         return moves
     
@@ -150,20 +244,23 @@ class Rook(Piece):
 
     def possible_moves(self):
         moves = []
-        board = self.board.board_position
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]  # Вверх, вниз, вправо, влево
 
-        for row in range(8):
-            if self.position[0] == row:
-                continue
-            move = self.can_move((row, self.position[1]))
-            moves.append(move)
-        
-        for col in range(8):
-            if self.position[1] == col:
-                continue
-            move = self.can_move((self.position[0], col))
-            moves.append(move)
-        
+        for dx, dy in directions:
+            x, y = self.position
+            while True:
+                x += dx
+                y += dy
+                if not (0 <= x < 8 and 0 <= y < 8):
+                    break
+                move = self.can_move((x, y))
+                if move:
+                    moves.append(move)
+                    # Если там фигура — дальше не идём
+                    if self.board.get_id_board_position((x, y)) is not None:
+                        break
+                else:
+                    break
         return moves
 
 
@@ -172,14 +269,22 @@ class Bishop(Piece):
 
     def possible_moves(self):
         moves = []
-        board = self.board.board_position
+        board = self.board
 
         for diagonal in range(1, 8):
             move1 = self.can_move((self.position[0] + diagonal, self.position[1] + diagonal))
             move2 = self.can_move((self.position[0] - diagonal, self.position[1] - diagonal))
+            move3 = self.can_move((self.position[0] - diagonal, self.position[1] + diagonal))
+            move4 = self.can_move((self.position[0] + diagonal, self.position[1] - diagonal))
 
-            moves.append(move1)
-            moves.append(move2)
+            if move1:
+                moves.append(move1)
+            if move2:
+                moves.append(move2)
+            if move3:
+                moves.append(move3)
+            if move4:
+                moves.append(move4)
 
         return moves
 
@@ -188,7 +293,7 @@ class Knight(Piece):
     price = 3
 
     def possible_moves(self):
-        board = self.board.board_position
+        board = self.board
 
         moves = [
             (2, -1), (2, 1), (-2, 1), (-2, -1),
@@ -209,27 +314,37 @@ class Queen(Piece):
     def possible_moves(self):
         moves = []
 
-        board = self.board.board_position
+        board = self.board
 
         for row in range(8):
             if self.position[0] == row:
                 continue
             move = self.can_move((row, self.position[1]))
-            moves.append(move)
+            if move:
+                moves.append(move)
         
         for col in range(8):
             if self.position[1] == col:
                 continue
             move = self.can_move((self.position[0], col))
-            moves.append(move)
+            if move:
+                moves.append(move)
         
         for diagonal in range(1, 8):
             move1 = self.can_move((self.position[0] + diagonal, self.position[1] + diagonal))
             move2 = self.can_move((self.position[0] - diagonal, self.position[1] - diagonal))
+            move3 = self.can_move((self.position[0] - diagonal, self.position[1] + diagonal))
+            move4 = self.can_move((self.position[0] + diagonal, self.position[1] - diagonal))
 
-            moves.append(move1)
-            moves.append(move2)
-        
+            if move1:
+                moves.append(move1)
+            if move2:
+                moves.append(move2)
+            if move3:
+                moves.append(move3)
+            if move4:
+                moves.append(move4)
+
         return moves
 
 
@@ -240,6 +355,8 @@ class King(Piece):
 
         directions = [(1, 1), (1, -1), (-1, 1), (-1, -1), (1, 0), (-1, 0), (0, 1), (0, -1)]
         for dx, dy in directions:
-            moves.append(self.can_move((self.position[0] + dx, self.position[1] + dy)))
+            move = self.can_move((self.position[0] + dx, self.position[1] + dy))
+            if move:
+                moves.append()
         
         return moves

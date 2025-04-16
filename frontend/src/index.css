@@ -49,6 +49,10 @@
     background-image: url(./assets/pieces-basic-svg/queen-b.svg);
 }
 
+.highlight {
+    box-shadow: inset 0 0 0 1000px rgba(255, 0, 0, 0.4);
+}
+
 .main-menu {
     height: 100vh;
     display: flex;

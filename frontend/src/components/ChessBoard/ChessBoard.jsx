@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import "./ChessBoard.css"
 import { Piece } from "../ChessPieces/Piece";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 
 export const ChessBoard = () => {
     const [pieces, setPieces] = useState({});
@@ -46,35 +47,69 @@ export const ChessBoard = () => {
                 console.log("Game initialized:", data);
                 setGameData(data.game);
                 setPieces(data.pieces || {});
+                // console.log('DATA:', data.pieces);
+                
+                socketRef.current = new WebSocket(`ws://localhost:8000/ws/chess/${data.game.id}/`);
+
+                socketRef.current.onopen = () => {
+                    console.log("WebSocket connected!");
+                };
+
+                socketRef.current.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('DATA main:', data);
+                
+                        if (data.pieces) {
+                            let normalized = {};
+                            
+                            data.pieces.forEach((p) => {
+                                const key = `(${p.position[0]}, ${p.position[1]})`;
+                                normalized[key] = p;
+                            });
+                            setPieces(normalized);
+                            console.log("DATA (object):", normalized);
+                        }
+                
+                        if (data.moves) {
+                            console.log("DATA:",data);
+                            
+                            setPossibleMoves(data.possible_moves);
+                        }
+                
+                        if (data.type === "move_result") {
+                            const { from, to } = data;
+                            const newPieces = { ...pieces };
+                            const movedPiece = newPieces[from];
+                            delete newPieces[from];
+                            newPieces[to] = movedPiece;
+                            setPieces(newPieces);
+                        }
+                
+                        if (data.type === "possible_moves") {
+                            setPossibleMoves(data.moves);
+                        }
+                
+                    } catch (err) {
+                        console.error("WebSocket message error:", err);
+                    }
+                };
+
+                socketRef.current.onerror = (err) => {
+                    console.error("WebSocket error:", err);
+                };
+
+                socketRef.current.onclose = (event) => {
+                    console.log("WebSocket closed:", event);
+                };
+            
+                return () => socketRef.current?.close();
             })
             .catch((err) => console.error("Error initializing game:", err));
+    
+            
+        }, []);
 
-        socketRef.current = new WebSocket("ws://localhost:8000/ws/chess/");
-
-        socketRef.current.onopen = () => {
-            console.log("WebSocket connected!");
-        };
-
-        socketRef.current.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.pieces) setPieces(data.pieces);
-                if (data.possible_moves) setPossibleMoves(data.possible_moves);
-            } catch (err) {
-                console.error("WebSocket message error:", err);
-            }
-        };
-
-        socketRef.current.onerror = (err) => {
-            console.error("WebSocket error:", err);
-        };
-
-        socketRef.current.onclose = (event) => {
-            console.log("WebSocket closed:", event);
-        };
-
-        return () => socketRef.current?.close();
-    }, []);
 
     const handleDragStart = (e, position) => {
         e.dataTransfer.setData("position", position);
@@ -111,11 +146,13 @@ export const ChessBoard = () => {
 
     const handlePieceClick = (pos) => {
         setSelectedPiece(pos);
+        
         if (socketRef.current) {
             socketRef.current.send(
                 JSON.stringify({
                     type: "get_possible_moves",
                     from: pos,
+                    board: pieces
                 })
             );
         }
@@ -127,34 +164,36 @@ export const ChessBoard = () => {
             const positionKey = `(${row}, ${col})`;
             const piece = pieces[positionKey];
             const isMoveTarget = possibleMoves.includes(positionKey);
+            
+            // console.log(pieces);
+            
 
             return (
                 <div
-                    key={`${row}-${col}`}
+                    key={positionKey}
+                    id={`square-${row}-${col}`}
                     style={{
-                        width: 64,
-                        height: 64,
-                        backgroundColor: isMoveTarget
+                        backgroundColor: possibleMoves.some(
+                            ([r, c]) => `(${r}, ${c})` === positionKey
+                        )
                             ? "#baca44"
                             : isBlack
                             ? "#769656"
                             : "#eeeed2",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
                         border:
                             positionKey === selectedPiece
                                 ? "2px solid gold"
                                 : "1px solid transparent",
+                        display: "flex",
                     }}
                     onDrop={(e) => handleDrop(e, row, col)}
                     onDragOver={handleDragOver}
                 >
-                    {piece && (
+                    {piece && piece['type'] != null && (
                         <Piece
-                            classPiece={piece.type.toLowerCase()}
-                            colorPiece={piece.color}
-                            position={piece.position}
+                            classPiece={piece['type'].toLowerCase()}
+                            colorPiece={piece['color']}
+                            position={piece['position']}
                             onDragStart={(e) => handleDragStart(e, positionKey)}
                             onClick={() => handlePieceClick(positionKey)}
                         />
@@ -171,15 +210,7 @@ export const ChessBoard = () => {
         <div style={{ display: "flex", gap: "40px", padding: "30px" }}>
             <div>
                 <h3 style={{ marginBottom: 10 }}>Game ID: {gameData.id}</h3>
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(8, 64px)",
-                        gridTemplateRows: "repeat(8, 64px)",
-                        border: "2px solid #444",
-                    }}
-                    id="ChessBoard"
-                >
+                <div id="ChessBoard">
                     {Array.from({ length: 8 }, (_, row) =>
                         Array.from({ length: 8 }, (_, col) =>
                             renderSquare(7 - row, col) // переворачиваем доску
